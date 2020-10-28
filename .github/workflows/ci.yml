@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - 1.x
+  pull_request:
+    branches:
+      - 1.x
+
+jobs:
+
+  validation:
+    name: gradle wrapper validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: gradle/wrapper-validation-action@v1
+
+  ktlint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - name: ktlint
+        uses: ScaCap/action-ktlint@6d1c5f35db0fab187b5cafb1c38766087c9b8192
+        with:
+          level: info
+          fail_on_error: true
+          reporter: github-pr-review
+          github_token: ${{ secrets.ktlint_token }}
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - name: test
+        run: ./gradlew test --rerun-tasks
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - name: lint
+        run: >
+          ./gradlew :ext-acorn-android-testing:lint
+          :ext-acorn-android-timber:lint
+          :ext-acorn-android-lifecycle:lint
+          :samples:hello-bottombar:lintRelease
+          :samples:hello-concurrentpairnavigator:lintRelease
+          :samples:hello-navigation:lintRelease
+          :samples:hello-overridingback:lintRelease
+          :samples:hello-sharedata:lintRelease
+          :samples:hello-startactivity:lintRelease
+          :samples:hello-staterestoration:lintRelease
+          :samples:hello-transitionanimation:lintRelease
+          :samples:hello-viewfactory:lintRelease
+          :samples:hello-world:lintRelease
+          :samples:notes-app:android:lintRelease
+
+  connectedCheck:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+         api-level: [23,24,25,26,27,28,29]
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - name: connectedCheck
+        uses: ReactiveCircus/android-emulator-runner@v2.8.0
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: default
+          arch: x86_64
+          script: ./gradlew packageDebugAndroidTest && ./gradlew connectedCheck --max-workers=1
+
+  publishArtifacts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - name: make output dir
+        run: mkdir -p build/artifacts
+
+      - name: publishToMavenLocal
+        run: ./gradlew publishToMavenLocal -Dmaven.repo.local=build/artifacts
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: artifacts
+          path: build/artifacts
